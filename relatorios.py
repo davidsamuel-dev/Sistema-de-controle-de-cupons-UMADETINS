@@ -114,4 +114,5 @@ def gerar_pdf_filtrado(df, titulo_filtro="Geral"):
     pdf.set_xy(110, y_pos)
     pdf.cell(70, 5, "Tesouraria Geral SCCUADP", 0, 0, 'C')
 
+    
     return bytes(pdf.output())

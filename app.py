@@ -132,6 +132,7 @@ elif choice == "📝 Novo Cadastro":
             else:
                 st.warning("Preencha Nome e CPF.")
 
+
 # --- MÓDULO GESTÃO ---
 elif choice == "📋 Gestão de Registros":
     st.title("📋 Gestão e Relatórios")
@@ -139,15 +140,29 @@ elif choice == "📋 Gestão de Registros":
     
     if not df.empty:
         st.dataframe(df, use_container_width=True)
-        if st.button("📄 Gerar Relatório PDF"):
-            pdf_bytes = gerar_pdf_filtrado(df)
-            st.download_button("⬇️ Baixar PDF", data=pdf_bytes, file_name="Relatorio_SCCUADP.pdf")
         
+        # Geramos o PDF primeiro (isso é rápido)
+        pdf_bytes = gerar_pdf_filtrado(df)
+        
+        # O botão de download fica sempre visível e funcional
+        st.download_button(
+            label="📄 Baixar Relatório PDF",
+            data=pdf_bytes,
+            file_name="Relatorio_SCCUADP.pdf",
+            mime="application/pdf"
+        )
+        
+        st.divider() # Uma linha para separar
+        
+        st.subheader("🗑️ Excluir Registro")
         cpf_del = st.text_input("Digite o CPF para excluir")
-        if st.button("❌ Excluir"):
-            excluir_participante(cpf_del)
-            st.warning("Registro removido.")
-            time.sleep(1)
-            st.rerun()
+        if st.button("❌ Confirmar Exclusão"):
+            if cpf_del:
+                excluir_participante(cpf_del)
+                st.warning(f"Registro {cpf_del} removido.")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.error("Por favor, digite um CPF.")
     else:
         st.info("O banco de dados está vazio.")
