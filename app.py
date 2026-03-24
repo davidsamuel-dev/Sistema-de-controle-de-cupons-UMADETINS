@@ -99,39 +99,65 @@ if choice == "📊 Dashboard":
     else:
         st.info("Nenhum dado encontrado no Firebase.")
 
-# --- MÓDULO CADASTRO ---
+# --- MÓDULO CADASTRO (VERSÃO ATUALIZADA 2026) ---
 elif choice == "📝 Novo Cadastro":
-    st.title("📝 Novo Cadastro")
+    st.title("📝 Novo Cadastro - UMADETINS 2026")
+    
     with st.form("cadastro_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
+        
         with col1:
             nome = st.text_input("Nome Completo").upper()
             cpf = st.text_input("CPF (Somente números)")
             unidade = st.selectbox("Regional", ["Matriz", "Regional 1", "Regional 2", "Regional 3", "Regional 4", "Regional 5", "Regional 6"])
-            dept = st.selectbox("Departamento", ["JGE", "AGE", "Outro"])
+            is_crianca = st.checkbox("É criança? (Isento de inscrição)")
+            
         with col2:
-            qtd = st.selectbox("Tipo de Bloco", [100, 150, 0])
-            transp = "Ônibus" if qtd == 150 else "Carro"
-            st.info(f"💡 Logística: {transp} | Valor: R$ {qtd*2},00")
-            aloj = st.radio("Alojamento?", ["Sim", "Não"], horizontal=True)
-            bloco = st.selectbox("Retirou Bloco?", ["Sim", "Não"])
-            pago = st.selectbox("Status", ["Pendente", "Pago"])
+            transp = st.radio("Logística de Transporte", ["Ônibus", "Carro"], horizontal=True)
+            bloco = st.selectbox("Retirou Bloco?", ["Não", "Sim (100 cupons)", "Sim (150 cupons)"])
+            pago = st.selectbox("Status de Pagamento", ["Pendente", "Pago"])
+            aloj = st.radio("Necessita Alojamento?", ["Não", "Sim"], horizontal=True)
+
+        # --- LÓGICA DE CÁLCULO DE VALORES ---
+        valor_total = 0
+        
+        if is_crianca:
+            # Regra 2: Crianças pagam apenas passagem (R$ 137) se forem de ônibus
+            valor_total = 137 if transp == "Ônibus" else 0
+            info_msg = f"👶 Criança: Passagem R$ {valor_total},00"
+        else:
+            # Regra 1: Inscrição base R$ 163
+            valor_total = 163
+            
+            # Se pegou bloco, o valor é baseado nos cupons (substitui os 163)
+            if "100" in bloco:
+                valor_total = 200 # 100 * 2
+            elif "150" in bloco:
+                valor_total = 300 # 150 * 2
+            
+            info_msg = f"👤 Adulto: Total R$ {valor_total},00 (Inscrição + Logística)"
+
+        st.info(f"💰 {info_msg} | 🚗 Transporte: {transp}")
 
         if st.form_submit_button("🚀 Finalizar Inscrição"):
             if nome and cpf:
                 dados = {
-                    "nome": nome, "cpf": cpf, "unidade": unidade, 
-                    "departamento": dept, "transporte": transp, 
-                    "alojamento": aloj, "retirou_bloco": bloco, 
-                    "qtd_cupons": qtd, "pago": pago, 
+                    "nome": nome, 
+                    "cpf": cpf, 
+                    "unidade": unidade, 
+                    "is_crianca": is_crianca,
+                    "transporte": transp, 
+                    "alojamento": aloj, 
+                    "bloco": bloco, 
+                    "valor_total": valor_total,
+                    "pago": pago, 
                     "data_registro": datetime.now().strftime("%d/%m/%Y %H:%M")
                 }
                 salvar_participante(dados)
                 st.success(f"✅ {nome} cadastrado com sucesso!")
-                st.snow()
+                st.balloons()
             else:
-                st.warning("Preencha Nome e CPF.")
-
+                st.warning("⚠️ Por favor, preencha o Nome e o CPF.")
 
 # --- MÓDULO GESTÃO ---
 elif choice == "📋 Gestão de Registros":
