@@ -3,10 +3,11 @@ import pandas as pd
 import json
 import time
 import os
+import plotly.express as px  # <--- CERTIFIQUE-SE QUE ESTA LINHA ESTÁ AQUI
 from datetime import datetime
 from google.cloud import firestore
 from google.oauth2 import service_account
-from relatorios import gerar_pdf_filtrado # ESTA LINHA DEVE ESTAR ASSIM
+from relatorios import gerar_pdf_filtrado
 
 # --- CONEXÃO COM FIREBASE (VERSÃO CORRIGIDA) ---
 @st.cache_resource
