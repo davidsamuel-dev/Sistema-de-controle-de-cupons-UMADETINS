@@ -1,13 +1,12 @@
 import streamlit as st
-from google.cloud import firestore
-from google.oauth2 import service_account 
-import json
 import pandas as pd
-import plotly.express as px
-from relatorios import gerar_pdf_filtrado
-from datetime import datetime
+import json
 import time
 import os
+from datetime import datetime
+from google.cloud import firestore
+from google.oauth2 import service_account
+from relatorios import gerar_pdf_filtrado # ESTA LINHA DEVE ESTAR ASSIM
 
 # --- CONEXÃO COM FIREBASE (VERSÃO CORRIGIDA) ---
 @st.cache_resource
