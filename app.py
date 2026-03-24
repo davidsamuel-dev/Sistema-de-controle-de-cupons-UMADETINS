@@ -114,9 +114,10 @@ elif choice == "📝 Novo Cadastro":
             
         with col2:
             transp = st.radio("Logística de Transporte", ["Ônibus", "Carro"], horizontal=True)
+            aloj = st.radio("Necessita Alojamento?", ["Não", "Sim"], horizontal=True)
             bloco = st.selectbox("Retirou Bloco?", ["Não", "Sim (100 cupons)", "Sim (150 cupons)"])
             pago = st.selectbox("Status de Pagamento", ["Pendente", "Pago"])
-            aloj = st.radio("Necessita Alojamento?", ["Não", "Sim"], horizontal=True)
+         
 
         # --- LÓGICA DE CÁLCULO DE VALORES ---
         valor_total = 0
@@ -158,6 +159,7 @@ elif choice == "📝 Novo Cadastro":
                 st.balloons()
             else:
                 st.warning("⚠️ Por favor, preencha o Nome e o CPF.")
+
 
 # --- MÓDULO GESTÃO ---
 elif choice == "📋 Gestão de Registros":
