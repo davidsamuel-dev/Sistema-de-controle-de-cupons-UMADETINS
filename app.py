@@ -152,7 +152,6 @@ elif choice == "📝 Novo Cadastro":
             qtd = st.selectbox("Quantidade de Cupons", [100, 150, 0], help="100 (Carro) / 150 (Ônibus)")
             transp = "Ônibus" if qtd == 150 else "Carro"
             valor_total = qtd * 2
-            st.info(f"🚚 Transporte: {transp} | 💰 Valor: R$ {valor_total},00")
             aloj = st.radio("Necessita Alojamento?", ["Sim", "Não"])
             bloco = st.selectbox("Retirou Bloco?", ["Sim", "Não"])
             pago = st.selectbox("Status Pagamento", ["Pendente", "Pago"])
