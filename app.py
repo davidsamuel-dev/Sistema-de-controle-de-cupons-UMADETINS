@@ -1,212 +1,153 @@
 import streamlit as st
-import sqlite3
+from google.cloud import firestore
+from google.oauth2 import service_account 
+import json
 import pandas as pd
 import plotly.express as px
 from relatorios import gerar_pdf_filtrado
 from datetime import datetime
-import io
+import time
+import os
+
+# --- CONEXÃO COM FIREBASE (VERSÃO CORRIGIDA) ---
+@st.cache_resource
+def get_db():
+    # 1. Tenta carregar do arquivo local primeiro (Para não dar erro de Secrets no Windows)
+    if os.path.exists('chave.json'):
+        with open('chave.json') as f:
+            key_dict = json.load(f)
+        creds = service_account.Credentials.from_service_account_info(key_dict)
+    # 2. Se não houver arquivo, tenta os segredos da Web (Streamlit Cloud)
+    else:
+        try:
+            key_dict = json.loads(st.secrets["textkey"])
+            creds = service_account.Credentials.from_service_account_info(key_dict)
+        except Exception as e:
+            st.error("Erro: Arquivo 'chave.json' não encontrado e segredos da web ausentes.")
+            st.stop()
+    
+    return firestore.Client(credentials=creds)
+
+db = get_db()
+
+# --- FUNÇÕES DE CRUD FIREBASE ---
+def salvar_participante(dados):
+    db.collection("participantes").document(dados['cpf']).set(dados)
+
+def buscar_participantes():
+    docs = db.collection("participantes").stream()
+    lista = [doc.to_dict() for doc in docs]
+    return pd.DataFrame(lista)
+
+def excluir_participante(cpf):
+    db.collection("participantes").document(cpf).delete()
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="SCCUADP 2026", layout="wide", page_icon="🎫")
 
-# CSS Refinado para Contraste Total (Independente de Tema Claro/Escuro)
+# --- CSS ---
 st.markdown("""
     <style>
-    [data-testid="stSidebar"] {
-        background-color: #001F3F !important;
-        border-right: 1px solid #87CEEB;
-    }
-    [data-testid="stSidebar"] .stMarkdown, 
-    [data-testid="stSidebar"] p, 
-    [data-testid="stSidebar"] span, 
-    [data-testid="stSidebar"] label {
-        color: #FFFFFF !important;
-    }
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
-        background-color: rgba(135, 206, 235, 0.1);
-        padding: 10px 15px;
-        border-radius: 8px;
-        margin-bottom: 5px;
-        transition: 0.3s;
-        border: 1px solid transparent;
-    }
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {
-        background-color: rgba(135, 206, 235, 0.3);
-        border: 1px solid #87CEEB;
-    }
-    .sidebar-title {
-        color: #87CEEB !important;
-        text-align: center;
-        font-weight: bold;
-        font-size: 24px;
-        margin-bottom: 0px;
-    }
-    .sidebar-sub {
-        color: #FFFFFF !important;
-        text-align: center;
-        font-size: 14px;
-        margin-bottom: 20px;
-    }
-    div.stButton > button:first-child {
-        background-color: #87CEEB !important;
-        color: #001F3F !important;
-        font-weight: bold;
-    }
+    [data-testid="stSidebar"] { background-color: #001F3F !important; border-right: 2px solid #87CEEB; }
+    [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] p, 
+    [data-testid="stSidebar"] span, [data-testid="stSidebar"] label { color: #FFFFFF !important; }
+    .stTextInput > div > div > input, .stSelectbox > div > div > div { border-radius: 10px !important; border: 1px solid #87CEEB !important; }
+    [data-testid="stMetric"] { background-color: #f0f8ff; padding: 15px; border-radius: 15px; border-left: 5px solid #87CEEB; }
+    div.stButton > button:first-child { background-color: #87CEEB !important; color: #001F3F !important; font-weight: bold; border-radius: 20px; width: 100%; }
+    .sidebar-title { color: #87CEEB !important; text-align: center; font-weight: bold; font-size: 26px; margin-bottom: 0px; }
+    .sidebar-sub { color: #FFFFFF !important; text-align: center; font-size: 14px; margin-bottom: 20px; opacity: 0.8; }
     </style>
     """, unsafe_allow_html=True)
-
-# --- FUNÇÕES DE BANCO DE DADOS ---
-def get_connection():
-    return sqlite3.connect('sccuadp_2026.db')
-
-def init_db():
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS participantes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nome TEXT NOT NULL, cpf TEXT UNIQUE NOT NULL,
-                    unidade TEXT, departamento TEXT, transporte TEXT,
-                    alojamento TEXT, retirou_bloco TEXT, qtd_cupons INTEGER,
-                    pago TEXT, data_registro TIMESTAMP)''')
-    conn.commit()
-    conn.close()
-
-init_db()
 
 # --- SIDEBAR ---
 with st.sidebar:
     st.markdown('<p class="sidebar-title">⛪ AD PARAÍSO</p>', unsafe_allow_html=True)
     st.markdown('<p class="sidebar-sub">SCCUADP 2026</p>', unsafe_allow_html=True)
-    
-    col_img1, col_img2, col_img3 = st.columns([1,2,1])
-    with col_img2:
-        st.image("https://cdn-icons-png.flaticon.com/512/2666/2666505.png", width=80)
-    
+    st.image("https://cdn-icons-png.flaticon.com/512/2666/2666505.png", width=80)
     st.markdown("---")
-    
-    # IMPORTANTE: O nome aqui deve ser igual ao usado nos IFs abaixo
-    choice = st.radio(
-        "NAVEGAÇÃO PRINCIPAL",
-        ["📊 Dashboard", "📝 Novo Cadastro", "📋 Gestão de Registros"]
-    )
-    
+    choice = st.radio("NAVEGAÇÃO PRINCIPAL", ["📊 Dashboard", "📝 Novo Cadastro", "📋 Gestão de Registros"])
     st.markdown("---")
     st.caption("📍 Paraíso do Tocantins - TO")
-    
+
 # --- MÓDULO DASHBOARD ---
 if choice == "📊 Dashboard":
-    st.title("📊 Painel de Indicadores - SCCUADP 2026")
-    conn = get_connection()
-    df = pd.read_sql_query("SELECT * FROM participantes", conn)
-    conn.close()
+    st.title("📊 Painel de Indicadores")
+    df = buscar_participantes()
 
     if not df.empty:
         valor_pago = df[df['pago'] == 'Pago']['qtd_cupons'].sum() * 2
-        valor_pendente = (df[df['pago'] == 'Pendente']['qtd_cupons'].sum() * 2)
-        total_onibus = len(df[df['transporte'] == 'Ônibus'])
-        vagas_alojamento = len(df[df['alojamento'] == 'Sim'])
-        blocos_100 = len(df[df['qtd_cupons'] == 100])
-        blocos_150 = len(df[df['qtd_cupons'] == 150])
-        sem_bloco = len(df[df['qtd_cupons'] == 0])
-
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Financeiro Recebido", f"R$ {valor_pago},00")
-            st.caption(f"Pendente: R$ {valor_pendente},00")
-        with col2:
-            st.metric("Passageiros (Ônibus)", f"{total_onibus} pessoas")
-        with col3:
-            st.metric("Vagas Alojamento", f"{vagas_alojamento} vagas")
-        with col4:
-            st.metric("Total Inscritos", len(df))
+        valor_pendente = df[df['pago'] == 'Pendente']['qtd_cupons'].sum() * 2
+        
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Financeiro Pago", f"R$ {valor_pago},00", f"Pendente: R$ {valor_pendente}")
+        m2.metric("Passageiros Ônibus", len(df[df['transporte'] == 'Ônibus']))
+        m3.metric("Alojamento", len(df[df['alojamento'] == 'Sim']))
+        m4.metric("Total Inscritos", len(df))
 
         st.markdown("---")
-        c_g1, c_g2 = st.columns(2)
-        with c_g1:
-            st.subheader("Distribuição de Blocos")
-            dados_blocos = pd.DataFrame({
-                'Tipo de Bloco': ['100 Cupons', '150 Cupons', 'Sem Bloco'],
-                'Quantidade': [blocos_100, blocos_150, sem_bloco]
-            })
-            fig_blocos = px.bar(dados_blocos, x='Tipo de Bloco', y='Quantidade', color='Tipo de Bloco',
-                               color_discrete_map={'100 Cupons':'#87CEEB', '150 Cupons':'#001F3F', 'Sem Bloco':'#C0C0C0'})
-            st.plotly_chart(fig_blocos, use_container_width=True)
-        with c_g2:
-            st.subheader("Inscritos por Regional")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.subheader("📦 Distribuição de Blocos")
+            df_counts = df['qtd_cupons'].value_counts().reset_index()
+            df_counts.columns = ['Tipo', 'Qtd']
+            fig = px.bar(df_counts, x='Tipo', y='Qtd', color='Tipo', color_discrete_sequence=px.colors.sequential.Blues_r)
+            st.plotly_chart(fig, use_container_width=True)
+        with c2:
+            st.subheader("🌍 Regional/Unidade")
             fig_un = px.pie(df, names='unidade', hole=0.4, color_discrete_sequence=px.colors.sequential.Blues_r)
             st.plotly_chart(fig_un, use_container_width=True)
     else:
-        st.info("Ainda não há dados cadastrados para exibir os indicadores.")
+        st.info("Nenhum dado encontrado no Firebase.")
 
 # --- MÓDULO CADASTRO ---
 elif choice == "📝 Novo Cadastro":
-    st.title("📝 Novo Cadastro de Participante")
-    with st.form("cadastro_form"):
+    st.title("📝 Novo Cadastro")
+    with st.form("cadastro_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
             nome = st.text_input("Nome Completo").upper()
-            cpf = st.text_input("CPF (Apenas números)")
-            unidade = st.selectbox("Unidade/Regional", ["Matriz", "Regional 1", "Regional 2", "Regional 3", "Regional 4", "Regional 5", "Regional 6"])
+            cpf = st.text_input("CPF (Somente números)")
+            unidade = st.selectbox("Regional", ["Matriz", "Regional 1", "Regional 2", "Regional 3", "Regional 4", "Regional 5", "Regional 6"])
             dept = st.selectbox("Departamento", ["JGE", "AGE", "Outro"])
         with col2:
-            qtd = st.selectbox("Quantidade de Cupons", [100, 150, 0], help="100 (Carro) / 150 (Ônibus)")
+            qtd = st.selectbox("Tipo de Bloco", [100, 150, 0])
             transp = "Ônibus" if qtd == 150 else "Carro"
-            valor_total = qtd * 2
-            aloj = st.radio("Necessita Alojamento?", ["Sim", "Não"])
+            st.info(f"💡 Logística: {transp} | Valor: R$ {qtd*2},00")
+            aloj = st.radio("Alojamento?", ["Sim", "Não"], horizontal=True)
             bloco = st.selectbox("Retirou Bloco?", ["Sim", "Não"])
-            pago = st.selectbox("Status Pagamento", ["Pendente", "Pago"])
+            pago = st.selectbox("Status", ["Pendente", "Pago"])
 
-        if st.form_submit_button("Confirmar Registro"):
+        if st.form_submit_button("🚀 Finalizar Inscrição"):
             if nome and cpf:
-                try:
-                    conn = get_connection()
-                    c = conn.cursor()
-                    c.execute("""INSERT INTO participantes 
-                              (nome, cpf, unidade, departamento, transporte, alojamento, retirou_bloco, qtd_cupons, pago, data_registro) 
-                              VALUES (?,?,?,?,?,?,?,?,?,?)""",
-                              (nome, cpf, unidade, dept, transp, aloj, bloco, qtd, pago, datetime.now().strftime("%d/%m/%Y %H:%M")))
-                    conn.commit()
-                    conn.close()
-                    st.success(f"✅ {nome} registrado com sucesso!")
-                except sqlite3.IntegrityError:
-                    st.error("Erro: Este CPF já existe!")
+                dados = {
+                    "nome": nome, "cpf": cpf, "unidade": unidade, 
+                    "departamento": dept, "transporte": transp, 
+                    "alojamento": aloj, "retirou_bloco": bloco, 
+                    "qtd_cupons": qtd, "pago": pago, 
+                    "data_registro": datetime.now().strftime("%d/%m/%Y %H:%M")
+                }
+                salvar_participante(dados)
+                st.success(f"✅ {nome} cadastrado com sucesso!")
+                st.snow()
             else:
                 st.warning("Preencha Nome e CPF.")
 
-# --- MÓDULO GESTÃO (LISTA E EDIÇÃO) ---
+# --- MÓDULO GESTÃO ---
 elif choice == "📋 Gestão de Registros":
     st.title("📋 Gestão e Relatórios")
-    conn = get_connection()
-    df_original = pd.read_sql_query("SELECT * FROM participantes", conn)
+    df = buscar_participantes()
     
-    if not df_original.empty:
-        st.subheader("🔍 Filtros para PDF")
-        f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-        with f_col1: f_unidade = st.multiselect("Regional", df_original['unidade'].unique())
-        with f_col2: f_dept = st.multiselect("Departamento", df_original['departamento'].unique())
-        with f_col3: f_transp = st.multiselect("Transporte", df_original['transporte'].unique())
-        with f_col4: f_pago = st.multiselect("Pagamento", df_original['pago'].unique())
-
-        df_filtrado = df_original.copy()
-        if f_unidade: df_filtrado = df_filtrado[df_filtrado['unidade'].isin(f_unidade)]
-        if f_dept: df_filtrado = df_filtrado[df_filtrado['departamento'].isin(f_dept)]
-        if f_transp: df_filtrado = df_filtrado[df_filtrado['transporte'].isin(f_transp)]
-        if f_pago: df_filtrado = df_filtrado[df_filtrado['pago'].isin(f_pago)]
-
-        st.dataframe(df_filtrado, use_container_width=True)
-
-        pdf_output = gerar_pdf_filtrado(df_filtrado, "Relatório Filtrado")
-        st.download_button(label="📄 Baixar Lista em PDF", data=pdf_output, 
-                           file_name=f"Relatorio_SCCUADP.pdf", mime="application/pdf")
+    if not df.empty:
+        st.dataframe(df, use_container_width=True)
+        if st.button("📄 Gerar Relatório PDF"):
+            pdf_bytes = gerar_pdf_filtrado(df)
+            st.download_button("⬇️ Baixar PDF", data=pdf_bytes, file_name="Relatorio_SCCUADP.pdf")
         
-        st.markdown("---")
-        id_del = st.number_input("ID para excluir", min_value=0, step=1)
+        cpf_del = st.text_input("Digite o CPF para excluir")
         if st.button("❌ Excluir"):
-            c = conn.cursor()
-            c.execute("DELETE FROM participantes WHERE id=?", (id_del,))
-            conn.commit()
-            conn.close()
+            excluir_participante(cpf_del)
+            st.warning("Registro removido.")
+            time.sleep(1)
             st.rerun()
     else:
-        st.info("Banco de dados vazio.")
-    conn.close()
+        st.info("O banco de dados está vazio.")
