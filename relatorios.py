@@ -1,6 +1,23 @@
 from fpdf import FPDF
 import pandas as pd
 from datetime import datetime
+import unicodedata
+
+def remover_acentos(txt):
+    if not isinstance(txt, str):
+        return str(txt)
+    # Transforma caracteres como 'Í' em 'I', 'õ' em 'o', etc.
+    return ''.join(c for c in unicodedata.normalize('NFD', txt)
+                  if unicodedata.category(c) != 'Mn')
+
+# DENTRO DA SUA FUNÇÃO gerar_pdf_filtrado, logo no início:
+def gerar_pdf_filtrado(df, titulo_filtro="Geral"):
+    # Limpa os acentos de todo o DataFrame para o PDF não travar
+    df = df.copy()
+    for col in df.columns:
+        df[col] = df[col].apply(remover_acentos)
+    
+    pdf = PDF()
 
 class PDF(FPDF):
     def header(self):
@@ -18,12 +35,7 @@ class PDF(FPDF):
         self.set_text_color(128, 128, 128)
         self.cell(0, 10, f'Página {self.page_no()} | Gerado em {datetime.now().strftime("%d/%m/%Y %H:%M")}', 0, 0, 'C')
 
-def gerar_pdf_filtrado(df, titulo_filtro="Geral"):
-    pdf = PDF()
-    pdf.set_auto_page_break(auto=True, margin=20)
-    
-    df = df.sort_values(by=['unidade', 'departamento', 'nome'])
-    unidades = df['unidade'].unique()
+
 
     # --- LISTAGEM ---
     for unidade in unidades:
